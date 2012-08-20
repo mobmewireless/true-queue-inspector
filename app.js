@@ -55,7 +55,7 @@ fs.readFile('settings.json', 'utf-8', function(err, data){
       previousData = { previousLength: 0, previousMaxScore: 0  };
       redisClient.multi()
         .zcard(queueKeyBase)
-        .zcount(queueKeyBase, '(' + previousData.previousMaxScore,'+inf')
+        .zcount(queueKeyBase, '(' + (previousData.previousMaxScore || 0),'+inf')
         .zrevrange(queueKeyBase,0,0)
         .exec(function(err,replies){
           redisClient.zscore(queueKeyBase,parseInt(replies[2][0]), function(err,res){
