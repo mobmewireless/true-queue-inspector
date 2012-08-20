@@ -30,8 +30,8 @@ var Queue = Backbone.Model.extend({
     now.QueueSnapshot(self.get('instance'), self.get('name'), self.previousData(), function(result,meta){
       var currentTimeStamp = Math.round(Date.now()/1000);
       var fetchInterval    = currentTimeStamp - self.get('PreviousFetchTimeStamp');
-      var pushRate         = Math.round(result.newItems/fetchInterval);
-      var dequeueRate      = Math.round(result.removedItems/fetchInterval);
+      var pushRate         = Math.ceil(result.newItems/fetchInterval);
+      var dequeueRate      = Math.ceil(result.removedItems/fetchInterval);
       self.set({
         pushRate: pushRate,
         dequeueRate: dequeueRate,
