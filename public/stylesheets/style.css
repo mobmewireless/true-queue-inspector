@@ -61,5 +61,6 @@ table.queue-items td { font-family: 'Monaco', 'Courier New'; font-size: 12px; }
 }
 
 .queue-title:hover {   border-color: #ccc; /*background: -webkit-linear-gradient(top,whiteSmoke,white);*/ }
+.queue-title .badge { float: right; }
 
 #home { display: none; }

@@ -1,6 +1,7 @@
 var Queue = Backbone.Model.extend({
   defaults: {
     name: 'queue',
+    instance: 'redis-instance',
     previousLength: 0,
     previousMaxScore: 0,
     PreviousFetchTimeStamp: null,
@@ -11,7 +12,7 @@ var Queue = Backbone.Model.extend({
   initialize: function(attrs){
     var self = this;
     self.set(attrs);
-    now.QueueSnapshot(self.get('name'), null, function(result,meta){
+    now.QueueSnapshot(self.get('instance'), self.get('name'), null, function(result,meta){
       self.set({
         PreviousFetchTimeStamp: Date.now(),
         previousLength: meta.previousLength,
@@ -26,7 +27,7 @@ var Queue = Backbone.Model.extend({
   },
   updateQueue: function(){
     var self = this;
-    now.QueueSnapshot(self.get('name'), self.previousData(), function(result,meta){
+    now.QueueSnapshot(self.get('instance'), self.get('name'), self.previousData(), function(result,meta){
       var currentTimeStamp = Math.round(Date.now()/1000);
       var fetchInterval    = currentTimeStamp - self.get('PreviousFetchTimeStamp');
       var pushRate         = Math.round(result.newItems/fetchInterval);
@@ -69,7 +70,7 @@ var QueueView = Backbone.View.extend({
     _.each(self.graphViews, function(v,k){ self.$el.append(v.render().$el); });
 
     // Stats
-    self.peekView = new PeekView(self.model.get('name'));
+    self.peekView = new PeekView(self.model.get('instance'), self.model.get('name'));
     self.$el.append(this.peekView.render().$el);
 
     self.render();
@@ -167,9 +168,9 @@ var QueueItemView = Backbone.View.extend({
 
 var QueueItemCollection = Backbone.Collection.extend({
   model: QueueItem,
-  get: function(queueName, size, callback){
+  get: function(instanceName, queueName, size, callback){
     var self = this;
-    now.getItems(queueName,size,function(res){
+    now.getItems(instanceName, queueName,size,function(res){
       res.forEach(function(i){
         self.add(new QueueItem({ raw: i }));
       });
@@ -183,8 +184,9 @@ var PeekView = Backbone.View.extend({
   id: 'peek-view',
   template: Handlebars.compile($('#peek-view-template').html()),
   resultsTemplate: Handlebars.compile($('#peek-view-results-template').html()),
-  initialize: function(queueName){
+  initialize: function(instanceName, queueName){
     this.queueName = queueName;
+    this.instanceName = instanceName;
     this.render();
   },
   events: {
@@ -210,7 +212,7 @@ var PeekView = Backbone.View.extend({
   renderResults: function(){
     var self = this;
     var size = parseInt(this.$el.find('#size').val());
-    new QueueItemCollection().get(self.queueName,size,function(data){
+    new QueueItemCollection().get(self.instanceName, self.queueName,size,function(data){
       self.$el.find('#results')[0].innerHTML = self.resultsTemplate(data);
     })
   }
@@ -220,13 +222,14 @@ var PeekView = Backbone.View.extend({
 // Home Queue List
 var QueueListView = Backbone.View.extend({
   el: $('#queue-list'),
-  template: Handlebars.compile("<div class='queue-title'><a href='#{{name}}'>{{name}}</a></div>"),
-  initialize: function(){
+  initialize: function(instanceName){
+    this.instanceName = instanceName;
+    this.template = Handlebars.compile("<div class='queue-title'><a href='#" + this.instanceName + "/{{name}}'>{{name}}</a><span class='badge'>" + this.instanceName + "</span></div>"),
     this.render();
   },
   render: function(){
     var self = this;
-    now.getQueues(function(res){
+    now.getQueues(self.instanceName, function(res){
       res.forEach(function(i){
         self.$el.append(self.template(i));
       });
@@ -246,21 +249,27 @@ $(function(){
 
     var AppRouter = Backbone.Router.extend({
       routes: {
-        ""        :      "home",
-        ":name"   :      "queue"
+        ""                  :      "home",
+        ":instance/:name"   :      "queue"
       },
       initialize: function(){
-        this.queueList = new QueueListView();
+        this.queueList = {};
+        var self = this;
+        now.getInstances(function(instances){
+          _.each(instances, function(i){
+            self.queueList[i] = new QueueListView(i);
+          });
+        });
       },
       home: function() {
         _.isUndefined(this.activeQueue) ? true : this.activeQueue.stopUpdateTimer();
         $('#queue-view, a.back').hide();
         $('#home').show();
       },
-      queue: function(name) {
-        if(!_.isUndefined(this.activeQueue) && this.activeQueue.model.get('name') == name)
+      queue: function(instance, name) {
+        if(!_.isUndefined(this.activeQueue) && this.activeQueue.model.get('name') == name && this.activeQueue.model.get('instance') == instance)
           this.activeQueue.startUpdateTimer(5000)
-        else this.activeQueue = new QueueView({ model: new Queue({ name: name }) });
+        else this.activeQueue = new QueueView({ model: new Queue({ name: name, instance: instance }) });
         $('#home').hide();
         $('#queue-view, a.back').show();
 
